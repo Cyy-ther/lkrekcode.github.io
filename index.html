@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Terminal_Access_v1.0</title>
+  <style>
+    body {
+      background-color: #0d0d0d;
+      color: #00ff41;
+      font-family: 'Courier New', Courier, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #terminal {
+      width: 80%;
+      max-width: 600px;
+      background: #000;
+      border: 1px solid #00ff41;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+    }
+
+    .input-line {
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      background: transparent;
+      border: none;
+      color: #00ff41;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      flex-grow: 1;
+    }
+
+    .output {
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+    }
+
+    .status-bar {
+      margin-top: 20px;
+      font-size: 0.8rem;
+      color: #008f11;
+    }
+  </style>
+</head>
+<body>
+
+<div id="terminal">
+  <div id="history" class="output">Welcome to Sec-Shell v1.0...
+    Type 'help' for commands.</div>
+  <div class="input-line">
+    <span>root@eastbourne:~#</span>
+    <input type="text" id="commandInput" autofocus>
+  </div>
+</div>
+
+<div class="status-bar">
+  System: Arch Linux | User: Lewis | Status: Shield Active
+</div>
+
+<script>
+  const input = document.getElementById('commandInput');
+  const history = document.getElementById('history');
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const cmd = input.value.toLowerCase().trim();
+      let response = "";
+
+      if (cmd === 'help') {
+        response = "Available: scan, status, clear, whoami";
+      } else if (cmd === 'scan') {
+        response = "Scanning ports... [22, 80, 443] OPEN. Firewall active.";
+      } else if (cmd === 'status') {
+        response = "CPU: Stable | GPU: RX 7900XTX Online | Network: Encrypted";
+      } else if (cmd === 'whoami') {
+        response = "Lewis Kreku - Cybersecurity Analyst";
+      } else if (cmd === 'clear') {
+        history.innerHTML = "";
