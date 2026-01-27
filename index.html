@@ -2,88 +2,342 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Terminal_Access_v1.0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>lewis@arch: ~ (GCSE Cybersecurity Portfolio)</title>
   <style>
+    :root {
+      --bg-color: #050505;
+      --term-green: #33ff33;
+      --term-glow: 0 0 15px rgba(51, 255, 51, 0.4);
+      --error-red: #ff5555;
+      --dir-blue: #5fb9ff;
+      --exec-gold: #f1fa8c;
+    }
+
     body {
-      background-color: #0d0d0d;
-      color: #00ff41;
-      font-family: 'Courier New', Courier, monospace;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
+      background-color: #000;
+      color: var(--term-green);
+      /* CORS-safe font stack */
+      font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
       margin: 0;
       overflow: hidden;
-    }
-
-    #terminal {
-      width: 80%;
-      max-width: 600px;
-      background: #000;
-      border: 1px solid #00ff41;
-      padding: 20px;
-      box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
-    }
-
-    .input-line {
+      height: 100vh;
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
 
+    /* --- CRT & MONITOR AESTHETICS --- */
+    .monitor {
+      position: relative;
+      width: 95vw;
+      height: 85vh;
+      max-width: 1100px;
+      background: var(--bg-color);
+      border: 12px solid #2a2a2a;
+      border-radius: 30px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0,0,0,0.9), inset 0 0 80px rgba(0,0,0,1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      flex: 1;
+      padding: 30px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Barrel Distortion Overlay */
+    .screen::after {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.3) 100%);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Scanlines */
+    .scanlines {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
+      background-size: 100% 4px;
+      z-index: 11;
+      pointer-events: none;
+    }
+
+    /* --- TERMINAL ELEMENTS --- */
+    #terminal {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: none; /* Firefox */
+      text-shadow: var(--term-glow);
+    }
+    #terminal::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+    .line { margin-bottom: 4px; line-height: 1.4; white-space: pre-wrap; }
+    .prompt-row { color: #fff; font-weight: bold; }
+    .user { color: #50fa7b; }
+    .host { color: #8be9fd; }
+    .cwd { color: #bd93f9; }
+    .error { color: var(--error-red); }
+    .dir { color: var(--dir-blue); font-weight: bold; }
+    .file { color: #f8f8f2; }
+
+    .input-wrapper { display: flex; margin-top: 10px; }
     input {
       background: transparent;
       border: none;
-      color: #00ff41;
+      color: var(--term-green);
       font-family: inherit;
       font-size: 1rem;
+      flex: 1;
       outline: none;
-      flex-grow: 1;
+      caret-color: var(--term-green);
+      padding-left: 10px;
     }
 
-    .output {
-      margin-bottom: 10px;
-      white-space: pre-wrap;
-    }
-
+    /* --- STATUS BAR --- */
     .status-bar {
-      margin-top: 20px;
+      height: 25px;
+      background: #111;
+      border-top: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
       font-size: 0.8rem;
-      color: #008f11;
+      color: #666;
     }
+
+    /* GLITCH ANIMATION */
+    @keyframes glitch {
+      0% { transform: translate(0); }
+      2% { transform: translate(-2px, 1px); }
+      4% { transform: translate(2px, -1px); }
+      100% { transform: translate(0); }
+    }
+    .glitch-active { animation: glitch 0.3s ease-in-out; }
   </style>
 </head>
 <body>
 
-<div id="terminal">
-  <div id="history" class="output">Welcome to Sec-Shell v1.0...
-    Type 'help' for commands.</div>
-  <div class="input-line">
-    <span>root@eastbourne:~#</span>
-    <input type="text" id="commandInput" autofocus>
+<div class="monitor" id="monitor">
+  <div class="scanlines"></div>
+  <div class="screen">
+    <div id="terminal">
+      <div id="output"></div>
+      <div class="input-wrapper" id="input-line" style="display: none;">
+        <span id="prompt-content"></span>
+        <input type="text" id="cmd" autofocus autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <span>SYSTEM: ARCH_LINUX // NODE: EASTBOURNE</span>
+    <span id="clock">00:00:00</span>
+    <span>CPU: 9950X @ 42°C</span>
   </div>
 </div>
 
-<div class="status-bar">
-  System: Arch Linux | User: Lewis | Status: Shield Active
-</div>
-
 <script>
-  const input = document.getElementById('commandInput');
-  const history = document.getElementById('history');
+  /**
+   * GCSE Project: Interactive Linux Terminal Emulator
+   * Feature: Virtual File System with Object-Oriented State Management
+   */
 
-  input.addEventListener('keydown', (e) => {
+  const output = document.getElementById('output');
+  const input = document.getElementById('cmd');
+  const promptContent = document.getElementById('prompt-content');
+  const monitor = document.getElementById('monitor');
+
+  // 1. NESTED FILE SYSTEM
+  const fs = {
+    "home": {
+      "lewis": {
+        "projects": {
+          "scanner.py": "import socket\n# TODO: Finalize GCSE port scanner logic",
+          "arch-config.sh": "pacman -Syu --noconfirm"
+        },
+        "about.txt": "Cybersecurity student based in Eastbourne.\nInterests: Penetration Testing, Arch Linux, Hardware.",
+        "specs.log": "CPU: Ryzen 9 9950X\nGPU: RX 7900XTX\nRAM: 32GB 6000MHz",
+        ".secret_key": "SHA256: 8f43... [ENCRYPTED]"
+      }
+    }
+  };
+
+  // 2. STATE TRACKING
+  let currentPath = ["home", "lewis"];
+  let history = [];
+  let historyIdx = -1;
+
+  // 3. UTILITY FUNCTIONS
+  function getCWD() {
+    let dir = fs;
+    for (let part of currentPath) { dir = dir[part]; }
+    return dir;
+  }
+
+  function updatePrompt() {
+    const pathStr = "~/" + currentPath.slice(2).join("/");
+    promptContent.innerHTML = `<span class="user">lewis</span>@<span class="host">arch</span>:<span class="cwd">${pathStr}</span>$`;
+  }
+
+  function print(text, className = 'line') {
+    const div = document.createElement('div');
+    div.className = className;
+    div.textContent = text;
+    output.appendChild(div);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  // 4. COMMAND LOGIC
+  const commands = {
+    help: () => print("Available: ls, cd, cat, neofetch, nmap, clear, whoami, pwd, history"),
+
+    pwd: () => print("/" + currentPath.join("/")),
+
+    ls: () => {
+      const items = Object.keys(getCWD());
+      items.forEach(item => {
+        const isDir = typeof getCWD()[item] === 'object';
+        print(item + (isDir ? "/" : ""), isDir ? 'dir' : 'file');
+      });
+    },
+
+    cd: (args) => {
+      const target = args[0];
+      if (!target || target === "~") {
+        currentPath = ["home", "lewis"];
+      } else if (target === "..") {
+        if (currentPath.length > 0) currentPath.pop();
+      } else {
+        const dir = getCWD();
+        if (dir[target] && typeof dir[target] === 'object') {
+          currentPath.push(target);
+        } else {
+          print(`cd: no such directory: ${target}`, 'error');
+        }
+      }
+      updatePrompt();
+    },
+
+    cat: (args) => {
+      const file = args[0];
+      const dir = getCWD();
+      if (dir[file] && typeof dir[file] === 'string') {
+        print(dir[file]);
+      } else {
+        print(`cat: ${file || ''}: No such file or directory`, 'error');
+      }
+    },
+
+    nmap: async (args) => {
+      const target = args[0] || "127.0.0.1";
+      print(`Starting Nmap scan on ${target}...`);
+      await new Promise(r => setTimeout(r, 800));
+      print("Discovering open ports...");
+      await new Promise(r => setTimeout(r, 1200));
+      print("PORT     STATE  SERVICE\n22/tcp   open   ssh\n80/tcp   open   http\n443/tcp  open   https\n5432/tcp closed postgresql");
+    },
+
+    neofetch: () => {
+      print(`
+       /\\         lewis@arch-9950x
+      /  \\        ----------------
+     /    \\       OS: Arch Linux x86_64
+    /      \\      Kernel: 6.12.arch1-1
+   /   ,,   \\     Uptime: 4 days, 12 hours
+  /   |  |   \\    CPU: AMD Ryzen 9 9950X
+ /_-''    ''-_\\   GPU: AMD Radeon RX 7900XTX
+                  RAM: 14GB / 32GB (43%)
+      `, 'exec-gold');
+    },
+
+    whoami: () => print("lewis (UID: 1000) - Eastbourne Cyber Division"),
+
+    clear: () => { output.innerHTML = ''; },
+
+    history: () => { history.forEach((cmd, i) => print(`${i}  ${cmd}`)); }
+  };
+
+  // 5. INPUT HANDLING
+  input.addEventListener('keydown', async (e) => {
+    // Tab Completion logic
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const parts = input.value.split(' ');
+      const last = parts.pop();
+      const match = Object.keys(getCWD()).find(k => k.startsWith(last));
+      if (match) {
+        parts.push(match);
+        input.value = parts.join(' ');
+      }
+    }
+
+    // Command History logic
+    if (e.key === 'ArrowUp') {
+      if (historyIdx > 0) {
+        historyIdx--;
+        input.value = history[historyIdx];
+      }
+    }
+
     if (e.key === 'Enter') {
-      const cmd = input.value.toLowerCase().trim();
-      let response = "";
+      const rawValue = input.value.trim();
+      const [cmdName, ...args] = rawValue.split(' ');
 
-      if (cmd === 'help') {
-        response = "Available: scan, status, clear, whoami";
-      } else if (cmd === 'scan') {
-        response = "Scanning ports... [22, 80, 443] OPEN. Firewall active.";
-      } else if (cmd === 'status') {
-        response = "CPU: Stable | GPU: RX 7900XTX Online | Network: Encrypted";
-      } else if (cmd === 'whoami') {
-        response = "Lewis Kreku - Cybersecurity Analyst";
-      } else if (cmd === 'clear') {
-        history.innerHTML = "";
+      if (rawValue) {
+        print(`${promptContent.textContent} ${rawValue}`, 'prompt-row');
+        history.push(rawValue);
+        historyIdx = history.length;
+      }
+
+      if (commands[cmdName]) {
+        await commands[cmdName](args);
+      } else if (cmdName) {
+        print(`zsh: command not found: ${cmdName}`, 'error');
+        // Trigger visual glitch on error
+        monitor.classList.add('glitch-active');
+        setTimeout(() => monitor.classList.remove('glitch-active'), 300);
+      }
+
+      input.value = '';
+    }
+  });
+
+  // 6. INITIALIZATION
+  async function boot() {
+    const lines = [
+      "Loading Arch Linux 6.12.0-1-ARCH...",
+      "Detecting hardware: AMD Ryzen 9 9950X... OK",
+      "Initializing RX 7900XTX Vulkan drivers...",
+      "Mounting /home/lewis/ encrypted partition...",
+      "System ready."
+    ];
+    for (let l of lines) {
+      print("[  OK  ] " + l);
+      await new Promise(r => setTimeout(r, 200));
+    }
+    document.getElementById('input-line').style.display = 'flex';
+    updatePrompt();
+    input.focus();
+  }
+
+  // Clock Update
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+  }, 1000);
+
+  boot();
+  document.addEventListener('click', () => input.focus());
+</script>
+
+</body>
+</html>
